@@ -15,12 +15,12 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 
 class LocalMcpServer(
-    private val context: Context,
+    private val appContext: Context,
     private val processor: McpRequestProcessor
 ) {
     private var engine: ApplicationEngine? = null
 
-    fun start(port: Int = AgentConfigStore.getLocalPort(context)) {
+    fun start(port: Int = AgentConfigStore.getLocalPort(appContext)) {
         if (engine != null) return
         engine = embeddedServer(CIO, host = "127.0.0.1", port = port) {
             routing {
@@ -38,7 +38,7 @@ class LocalMcpServer(
                 }
                 post("/mcp/{token}") {
                     val token = call.parameters["token"] ?: ""
-                    val expected = AgentConfigStore.getOrCreateToken(context)
+                    val expected = AgentConfigStore.getOrCreateToken(appContext)
                     if (token != expected) {
                         call.respondText(
                             """{"jsonrpc":"2.0","id":null,"error":{"code":-32001,"message":"Unauthorized"}}""",
