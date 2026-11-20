@@ -1,76 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Network (HTTPS to Gemini API + localhost 127.0.0.1 MCP server) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Voice interface (STT & wake-phrase listening) -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
-    <!-- Background persistence for local MCP server & hands-free voice listener -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-
-    <!-- App discovery & launching -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
-
-    <!-- System settings control (audio, DND, brightness) -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-    <uses-permission
-        android:name="android.permission.WRITE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <application
-        android:name=".PhoneAgentApp"
-        android:allowBackup="false"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:label="@string/app_name"
-        android:networkSecurityConfig="@xml/network_security_config"
+        android:allowBackup="true"
+        android:label="Gemini MCP Agent"
         android:supportsRtl="true"
-        android:theme="@style/Theme.GeminiMcpPhoneAgent">
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".ui.MainActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
-            android:windowSoftInputMode="adjustResize">
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Voice assist / quick-trigger deep link -->
-            <intent-filter>
-                <action android:name="com.geminimcp.phoneagent.ACTION_VOICE_TRIGGER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
 
-        <!-- Embedded Local MCP Streamable HTTP Server + Persistent Background Host -->
         <service
-            android:name=".mcp.McpForegroundService"
-            android:enabled="true"
+            android:name=".service.McpHostService"
             android:exported="false"
-            android:foregroundServiceType="specialUse|microphone">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Localhost-only Model Context Protocol server for on-device AI accessibility automation" />
-        </service>
+            android:foregroundServiceType="dataSync" />
 
-        <!-- Primary OS Execution Bridge: Live UI Tree, Gestures, Global Actions, Screenshots -->
         <service
-            android:name=".bridge.PhoneAccessibilityService"
-            android:exported="false"
-            android:label="@string/accessibility_service_label"
+            android:name=".accessibility.PhoneAccessibilityService"
+            android:exported="true"
+            android:label="Gemini MCP Phone Bridge"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -80,27 +46,15 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Secondary OS Bridge: Notification Reading, Dismissal & Action Execution -->
         <service
-            android:name=".bridge.AgentNotificationListener"
-            android:exported="false"
-            android:label="@string/notification_listener_label"
+            android:name=".notifications.PhoneNotificationListenerService"
+            android:exported="true"
+            android:label="Gemini MCP Notification Bridge"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
 
-        <!-- Quick Settings Tile for Instant Hands-Free Voice Trigger -->
-        <service
-            android:name=".voice.VoiceAgentTileService"
-            android:exported="true"
-            android:icon="@android:drawable/ic_btn_speak_now"
-            android:label="@string/tile_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
     </application>
 </manifest>

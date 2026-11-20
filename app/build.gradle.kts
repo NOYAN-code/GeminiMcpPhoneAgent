@@ -7,31 +7,18 @@ plugins {
 
 android {
     namespace = "com.geminimcp.phoneagent"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.geminimcp.phoneagent"
         minSdk = 30
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
+        targetSdk = 34
+        versionCode = 2
+        versionName = "2.0.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-        debug {
             isMinifyEnabled = false
         }
     }
@@ -47,7 +34,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     packaging {
@@ -55,41 +41,25 @@ android {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
                 "META-INF/INDEX.LIST",
-                "META-INF/io.netty.versions.properties",
-                "META-INF/DEPENDENCIES"
+                "META-INF/io.netty.versions.properties"
             )
         }
     }
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
-    implementation(composeBom)
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+    implementation("androidx.activity:activity-compose:1.9.1")
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
 
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Coroutines & Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-
-    // Embedded Local MCP Server (Ktor CIO - pure Kotlin coroutines, lightweight on Android)
-    val ktorVersion = "3.0.3"
-    implementation("io.ktor:ktor-server-core:$ktorVersion")
-    implementation("io.ktor:ktor-server-cio:$ktorVersion")
-    implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
-
-    // HTTP Client for Gemini REST API & Local MCP Loopback Client
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("io.ktor:ktor-server-core:2.3.12")
+    implementation("io.ktor:ktor-server-cio:2.3.12")
 }
