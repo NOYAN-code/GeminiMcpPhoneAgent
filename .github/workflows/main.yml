@@ -15,16 +15,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unpack ZIP automatically
+      - name: Unpack ZIP cleanly
         run: |
           if [ -f "GeminiMcpPhoneAgent.zip" ]; then
             unzip -o GeminiMcpPhoneAgent.zip -d _unpacked
+            rm -rf app cloudflare-tunnel-relay
             cp -r _unpacked/GeminiMcpPhoneAgent/* .
             rm -rf _unpacked GeminiMcpPhoneAgent.zip
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .
-            git commit -m "Unpack GeminiMcpPhoneAgent project" || true
+            git add -A
+            git commit -m "Clean update to GeminiMcpPhoneAgent v2.0" || true
             git push || true
           fi
 
