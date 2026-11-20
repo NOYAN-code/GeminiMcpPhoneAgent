@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gemini MCP Agent</string>
+    <string name="accessibility_service_label">Gemini MCP Phone Bridge</string>
+    <string name="accessibility_service_description">Allows the local on-device MCP server to read screen UI trees, perform taps/swipes/typing, and capture screenshots for Gemini vision fallback. All automation stays on-device.</string>
+    <string name="notification_listener_label">Gemini MCP Notification Bridge</string>
+    <string name="tile_label">Gemini Voice</string>
+</resources>

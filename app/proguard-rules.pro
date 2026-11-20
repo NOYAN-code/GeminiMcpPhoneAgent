@@ -1,0 +1,5 @@
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
+-keep class com.geminimcp.phoneagent.mcp.** { *; }
+-keep class com.geminimcp.phoneagent.gemini.** { *; }
+-dontwarn io.ktor.**
+-dontwarn org.slf4j.**
