@@ -141,6 +141,7 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         apiKey: String,
         model: String,
         port: Int,
+        tunnelBaseUrl: String,
         wakePhrase: String,
         requireConfirm: Boolean,
         maxSteps: Int,
@@ -150,15 +151,22 @@ class AgentViewModel(application: Application) : AndroidViewModel(application) {
         app.configStore.saveGeminiApiKey(apiKey)
         app.configStore.saveGeminiModel(model)
         app.configStore.saveMcpPort(port)
+        app.configStore.saveTunnelBaseUrl(tunnelBaseUrl)
         app.configStore.saveWakePhrase(wakePhrase)
         app.configStore.setRequireVoiceConfirmation(requireConfirm)
         app.configStore.saveRateLimits(maxSteps, maxRpm, dailyBudgetUsd)
         refreshBridgeStatus()
+        if (serverState.value.running) {
+            McpForegroundService.reconnectTunnel(getApplication())
+        }
     }
 
     fun rotateAuthToken() {
         app.configStore.rotateMcpAuthToken()
         refreshBridgeStatus()
+        if (serverState.value.running) {
+            McpForegroundService.reconnectTunnel(getApplication())
+        }
     }
 
     override fun onCleared() {

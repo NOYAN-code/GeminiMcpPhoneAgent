@@ -14,6 +14,7 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.options
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.serialization.encodeToString
@@ -45,9 +46,12 @@ class LocalMcpServer(
 
     fun start() {
         if (server != null) return
-        // STRICT LOOPBACK BINDING: 127.0.0.1 only — never exposed to Wi-Fi/LAN
+        // STRICT LOOPBACK BINDING: 127.0.0.1 only
         server = embeddedServer(CIO, host = "127.0.0.1", port = port) {
             routing {
+                options("/mcp") { respondCorsPreflight(call) }
+                options("/mcp/{token}") { respondCorsPreflight(call) }
+
                 get("/health") {
                     val body = buildJsonObject {
                         put("status", "ok")
@@ -61,8 +65,18 @@ class LocalMcpServer(
                     call.respondText(body.toString(), ContentType.Application.Json, HttpStatusCode.OK)
                 }
 
+                // Bearer-header endpoint (for local client / ADB forward)
                 post("/mcp") {
-                    handleMcpPost(call)
+                    val bearer = call.request.header(HttpHeaders.Authorization)
+                        ?.removePrefix("Bearer ")
+                        ?.trim()
+                    handleMcpPost(call, bearer)
+                }
+
+                // Secret-path endpoint (for Official Gemini App Custom Connector via HTTPS tunnel)
+                post("/mcp/{token}") {
+                    val pathToken = call.parameters["token"]
+                    handleMcpPost(call, pathToken)
                 }
             }
         }.start(wait = false)
@@ -73,19 +87,11 @@ class LocalMcpServer(
         server = null
     }
 
-    private suspend fun handleMcpPost(call: ApplicationCall) {
-        val authHeader = call.request.header(HttpHeaders.Authorization)
-        val bearer = authHeader?.removePrefix("Bearer ")?.trim()
-        if (!safetyGuard.isTokenValid(bearer)) {
-            val err = JsonRpcResponse(
-                id = null,
-                error = JsonRpcError(-32001, "Unauthorized: invalid or missing local Bearer token.")
-            )
-            call.respondText(json.encodeToString(err), ContentType.Application.Json, HttpStatusCode.Unauthorized)
-            return
-        }
-
-        val rawBody = call.receiveText()
+    /**
+     * Direct in-process JSON-RPC entrypoint used by RemoteTunnelClient (Cloudflare WebSocket Tunnel)
+     * as well as HTTP POST handlers. Returns Triple(httpStatusCode, jsonBody, sessionId).
+     */
+    suspend fun processJsonRpcRaw(rawBody: String): Triple<Int, String, String> {
         val req = try {
             json.decodeFromString<JsonRpcRequest>(rawBody)
         } catch (e: Exception) {
@@ -93,15 +99,11 @@ class LocalMcpServer(
                 id = null,
                 error = JsonRpcError(-32700, "Parse error: ${e.message}")
             )
-            call.respondText(json.encodeToString(err), ContentType.Application.Json, HttpStatusCode.BadRequest)
-            return
+            return Triple(400, json.encodeToString(err), activeSessionId)
         }
 
-        // JSON-RPC notifications (no id) return 202 Accepted per MCP Streamable HTTP spec
         if (req.method.startsWith("notifications/")) {
-            call.response.header("Mcp-Session-Id", activeSessionId)
-            call.respondText("", ContentType.Application.Json, HttpStatusCode.Accepted)
-            return
+            return Triple(202, "", activeSessionId)
         }
 
         val response = when (req.method) {
@@ -116,9 +118,31 @@ class LocalMcpServer(
                 error = JsonRpcError(-32601, "Method not found: ${req.method}")
             )
         }
+        return Triple(200, json.encodeToString(response), activeSessionId)
+    }
 
-        call.response.header("Mcp-Session-Id", activeSessionId)
-        call.respondText(json.encodeToString(response), ContentType.Application.Json, HttpStatusCode.OK)
+    private suspend fun respondCorsPreflight(call: ApplicationCall) {
+        call.response.header("Access-Control-Allow-Origin", "*")
+        call.response.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        call.response.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Mcp-Session-Id")
+        call.respondText("", ContentType.Text.Plain, HttpStatusCode.NoContent)
+    }
+
+    private suspend fun handleMcpPost(call: ApplicationCall, providedToken: String?) {
+        call.response.header("Access-Control-Allow-Origin", "*")
+        if (!safetyGuard.isTokenValid(providedToken)) {
+            val err = JsonRpcResponse(
+                id = null,
+                error = JsonRpcError(-32001, "Unauthorized: invalid or missing MCP token.")
+            )
+            call.respondText(json.encodeToString(err), ContentType.Application.Json, HttpStatusCode.Unauthorized)
+            return
+        }
+
+        val rawBody = call.receiveText()
+        val (status, body, sessionId) = processJsonRpcRaw(rawBody)
+        call.response.header("Mcp-Session-Id", sessionId)
+        call.respondText(body, ContentType.Application.Json, HttpStatusCode.fromValue(status))
     }
 
     private fun handleInitialize(req: JsonRpcRequest): JsonRpcResponse {
@@ -136,7 +160,7 @@ class LocalMcpServer(
             })
             put("serverInfo", buildJsonObject {
                 put("name", "gemini-android-mcp-server")
-                put("version", "1.0.0")
+                put("version", "1.1.0")
             })
         }
         return JsonRpcResponse(id = req.id, result = result)
@@ -144,10 +168,7 @@ class LocalMcpServer(
 
     private fun handleToolsList(req: JsonRpcRequest): JsonRpcResponse {
         val toolsJson = json.encodeToJsonElement(McpToolRegistry.allTools())
-        val result = buildJsonObject {
-            put("tools", toolsJson)
-        }
-        return JsonRpcResponse(id = req.id, result = result)
+        return JsonRpcResponse(id = req.id, result = buildJsonObject { put("tools", toolsJson) })
     }
 
     private suspend fun handleToolsCall(req: JsonRpcRequest): JsonRpcResponse {
@@ -195,10 +216,10 @@ class LocalMcpServer(
     }
 
     private fun handleResourcesList(req: JsonRpcRequest): JsonRpcResponse {
-        val result = buildJsonObject {
-            put("resources", json.encodeToJsonElement(McpToolRegistry.allResources()))
-        }
-        return JsonRpcResponse(id = req.id, result = result)
+        return JsonRpcResponse(
+            id = req.id,
+            result = buildJsonObject { put("resources", json.encodeToJsonElement(McpToolRegistry.allResources())) }
+        )
     }
 
     private suspend fun handleResourcesRead(req: JsonRpcRequest): JsonRpcResponse {

@@ -1,0 +1,12 @@
+name = "gemini-phone-mcp-relay"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[[durable_objects.bindings]]
+name = "PHONE_TUNNEL"
+class_name = "PhoneTunnelRelay"
+
+# SQLite-backed Durable Objects work 100% on the Cloudflare Workers FREE plan
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PhoneTunnelRelay"]

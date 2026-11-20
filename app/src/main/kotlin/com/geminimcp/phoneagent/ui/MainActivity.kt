@@ -1,11 +1,15 @@
 package com.geminimcp.phoneagent.ui
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -21,7 +25,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -57,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.geminimcp.phoneagent.gemini.AgentStepEvent
@@ -125,6 +133,11 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
         permissionLauncher.launch(perms.toTypedArray())
     }
 
+    val officialGeminiUrl = remember(uiState.settings.tunnelBaseUrl, uiState.settings.mcpAuthToken) {
+        val base = uiState.settings.tunnelBaseUrl.trim().trimEnd('/')
+        if (base.isNotBlank()) "$base/mcp/${uiState.settings.mcpAuthToken}" else ""
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -163,7 +176,7 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Local MCP Server & OS Bridge Status Card
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -173,14 +186,14 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
-                                text = if (serverState.running) "Local MCP Server: RUNNING" else "Local MCP Server: STOPPED",
+                                text = if (serverState.running) "MCP Server: RUNNING" else "MCP Server: STOPPED",
                                 fontWeight = FontWeight.Bold,
                                 color = if (serverState.running) Color(0xFF81C784) else Color(0xFFE57373)
                             )
                             Text(
-                                text = "127.0.0.1:${uiState.settings.mcpPort}/mcp  •  ${uiState.settings.geminiModel}",
+                                text = "Local: 127.0.0.1:${uiState.settings.mcpPort}/mcp",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -191,53 +204,79 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
                                 if (serverState.running) Icons.Default.Stop else Icons.Default.PlayArrow,
                                 contentDescription = null
                             )
-                            Text(if (serverState.running) " Stop" else " Start")
+                            Text(if (serverState.running) " Stop" else " Start", maxLines = 1, softWrap = false)
                         }
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = {
-                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                            },
+                            onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(if (uiState.accessibilityConnected) "Accessibility: ON" else "Enable Accessibility")
                         }
                         OutlinedButton(
-                            onClick = {
-                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                            },
+                            onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(if (uiState.notificationsConnected) "Notifications: ON" else "Enable Notifs")
                         }
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Hands-free wake phrase (\"${uiState.settings.wakePhrase}\")",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Switch(
-                            checked = uiState.settings.continuousWakeEnabled,
-                            onCheckedChange = { viewModel.toggleWakeWord(it) }
-                        )
-                    }
-
-                    Text(
-                        text = "Today: ${metrics.requestsToday} calls  •  ${metrics.promptTokensToday + metrics.outputTokensToday} tokens  •  Est. \$${"%.4f".format(metrics.estimatedCostUsdToday)} / \$${"%.2f".format(uiState.settings.dailyBudgetUsd)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
 
-            // Text / Voice Command Input
+            // Official Gemini App HTTPS Tunnel Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (serverState.tunnelConnected) Color(0xFF1B3A26) else MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = if (serverState.tunnelConnected) {
+                            "Official Gemini App Tunnel: CONNECTED"
+                        } else {
+                            "Official Gemini App Tunnel"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        color = if (serverState.tunnelConnected) Color(0xFF81C784) else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = serverState.tunnelStatusText,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (officialGeminiUrl.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = officialGeminiUrl,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            OutlinedButton(onClick = {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                cm.setPrimaryClip(ClipData.newPlainText("Gemini MCP URL", officialGeminiUrl))
+                                Toast.makeText(context, "Copied Official Gemini MCP URL", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                Text(" Copy URL")
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = { showSettings = true }) {
+                            Text("Set Cloudflare Worker Tunnel URL in Settings →")
+                        }
+                    }
+                }
+            }
+
+            // Optional In-App Voice / Text Command Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -250,7 +289,7 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
                     placeholder = {
                         Text(
                             if (voiceState == VoiceState.COMMAND_LISTENING) "Listening... $transcript"
-                            else "Type or tap Mic to command your phone..."
+                            else "Optional: test command locally..."
                         )
                     },
                     singleLine = true
@@ -279,7 +318,17 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
                 }
             }
 
-            Text("Live Execution Trace", style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Live Execution Trace", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = "Local API calls: ${metrics.requestsToday}",
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -292,7 +341,6 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
         }
     }
 
-    // Mandatory Sensitive Action Confirmation Dialog (works alongside voice confirmation)
     pendingConfirm?.let { req ->
         AlertDialog(
             onDismissRequest = { viewModel.resolveConfirmation(false) },
@@ -328,8 +376,8 @@ private fun AgentDashboardScreen(viewModel: AgentViewModel) {
             settings = uiState.settings,
             onDismiss = { showSettings = false },
             onRotateToken = { viewModel.rotateAuthToken() },
-            onSave = { key, model, port, wake, confirm, steps, rpm, budget ->
-                viewModel.saveConfiguration(key, model, port, wake, confirm, steps, rpm, budget)
+            onSave = { key, model, port, tunnelUrl, wake, confirm, steps, rpm, budget ->
+                viewModel.saveConfiguration(key, model, port, tunnelUrl, wake, confirm, steps, rpm, budget)
                 showSettings = false
             }
         )
@@ -350,10 +398,7 @@ private fun StepLogCard(step: AgentStepEvent) {
                 fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text(
-                text = step.detail,
-                style = MaterialTheme.typography.bodySmall
-            )
+            Text(text = step.detail, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -363,8 +408,9 @@ private fun SettingsDialog(
     settings: com.geminimcp.phoneagent.config.AgentSettings,
     onDismiss: () -> Unit,
     onRotateToken: () -> Unit,
-    onSave: (String, String, Int, String, Boolean, Int, Int, Double) -> Unit
+    onSave: (String, String, Int, String, String, Boolean, Int, Int, Double) -> Unit
 ) {
+    var tunnelBaseUrl by remember { mutableStateOf(settings.tunnelBaseUrl) }
     var apiKey by remember { mutableStateOf(settings.geminiApiKey) }
     var model by remember { mutableStateOf(settings.geminiModel) }
     var portText by remember { mutableStateOf(settings.mcpPort.toString()) }
@@ -376,20 +422,30 @@ private fun SettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Agent & Local MCP Settings") },
+        title = { Text("Tunnel & MCP Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = tunnelBaseUrl,
+                    onValueChange = { tunnelBaseUrl = it },
+                    label = { Text("Cloudflare Worker Tunnel URL") },
+                    placeholder = { Text("https://gemini-phone-mcp-relay.xxx.workers.dev") },
+                    singleLine = true
+                )
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("Gemini API Key") },
+                    label = { Text("Gemini API Key (Optional for Official App)") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true
                 )
                 OutlinedTextField(
                     value = model,
                     onValueChange = { model = it },
-                    label = { Text("Gemini Model") },
+                    label = { Text("Local Agent Model") },
                     singleLine = true
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -441,11 +497,11 @@ private fun SettingsDialog(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Local MCP Bearer Token: ${settings.mcpAuthToken.take(10)}...",
+                    text = "Secret MCP Token: ${settings.mcpAuthToken.take(12)}...",
                     style = MaterialTheme.typography.labelSmall
                 )
                 TextButton(onClick = onRotateToken) {
-                    Text("Rotate Local MCP Token")
+                    Text("Rotate Secret Tunnel Token")
                 }
             }
         },
@@ -455,6 +511,7 @@ private fun SettingsDialog(
                     apiKey,
                     model,
                     portText.toIntOrNull() ?: 8765,
+                    tunnelBaseUrl,
                     wakePhrase,
                     requireConfirm,
                     maxSteps.toIntOrNull() ?: 15,

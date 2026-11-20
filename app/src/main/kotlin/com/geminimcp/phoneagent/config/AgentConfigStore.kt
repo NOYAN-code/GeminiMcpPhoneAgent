@@ -12,6 +12,7 @@ data class AgentSettings(
     val geminiModel: String,
     val mcpPort: Int,
     val mcpAuthToken: String,
+    val tunnelBaseUrl: String,
     val wakePhrase: String,
     val continuousWakeEnabled: Boolean,
     val maxStepsPerTask: Int,
@@ -38,7 +39,6 @@ class AgentConfigStore(context: Context) {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (_: Exception) {
-            // Fallback strictly to MODE_PRIVATE if Keystore hardware is unavailable on emulators
             context.getSharedPreferences("${PREFS_NAME}_fallback", Context.MODE_PRIVATE)
         }
     }
@@ -50,6 +50,7 @@ class AgentConfigStore(context: Context) {
             geminiModel = prefs.getString(KEY_GEMINI_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL,
             mcpPort = prefs.getInt(KEY_MCP_PORT, DEFAULT_PORT),
             mcpAuthToken = token,
+            tunnelBaseUrl = prefs.getString(KEY_TUNNEL_BASE_URL, "") ?: "",
             wakePhrase = prefs.getString(KEY_WAKE_PHRASE, DEFAULT_WAKE_PHRASE) ?: DEFAULT_WAKE_PHRASE,
             continuousWakeEnabled = prefs.getBoolean(KEY_CONTINUOUS_WAKE, false),
             maxStepsPerTask = prefs.getInt(KEY_MAX_STEPS, 15).coerceIn(3, 40),
@@ -71,6 +72,10 @@ class AgentConfigStore(context: Context) {
 
     fun saveMcpPort(port: Int) {
         prefs.edit().putInt(KEY_MCP_PORT, port.coerceIn(1024, 65535)).apply()
+    }
+
+    fun saveTunnelBaseUrl(url: String) {
+        prefs.edit().putString(KEY_TUNNEL_BASE_URL, url.trim().trimEnd('/')).apply()
     }
 
     fun rotateMcpAuthToken(): String = generateAndSaveToken()
@@ -113,6 +118,7 @@ class AgentConfigStore(context: Context) {
         private const val KEY_GEMINI_MODEL = "gemini_model"
         private const val KEY_MCP_PORT = "mcp_port"
         private const val KEY_MCP_TOKEN = "mcp_auth_token"
+        private const val KEY_TUNNEL_BASE_URL = "tunnel_base_url"
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_CONTINUOUS_WAKE = "continuous_wake"
         private const val KEY_MAX_STEPS = "max_steps"
@@ -121,11 +127,10 @@ class AgentConfigStore(context: Context) {
         private const val KEY_BLOCKED_PACKAGES = "blocked_packages"
         private const val KEY_REQUIRE_CONFIRM = "require_voice_confirmation"
 
-        const val DEFAULT_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_PORT = 8765
         const val DEFAULT_WAKE_PHRASE = "hey gemini"
 
-        // Default privacy denylist: password managers, authenticators, and core wallet apps
         val DEFAULT_BLOCKED_PACKAGES = setOf(
             "com.google.android.apps.authenticator2",
             "com.authy.authy",

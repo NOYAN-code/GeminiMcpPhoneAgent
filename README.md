@@ -1,57 +1,41 @@
-# Gemini MCP Phone Agent (Android)
+# Gemini MCP Phone Agent + Free HTTPS Tunnel (for Official Gemini App)
 
-A standalone, voice-controlled Android smartphone automation agent that runs a **localhost-only Model Context Protocol (MCP) Streamable HTTP server** directly on-device and orchestrates multi-step phone tasks via **Google Gemini (`gemini-2.5-flash`)**.
+Control your Android phone directly from the **official Google Gemini app** (no Gemini API key needed!) via a built-in **on-device MCP Streamable HTTP server** + **free permanent Cloudflare Workers WebSocket HTTPS Tunnel**.
 
-## Selected Architecture
-
-| Layer | Selected Strategy | Why It Wins |
-| :--- | :--- | :--- |
-| **OS Platform** | Android 11+ (API 30–35, Kotlin + Compose) | Full system-wide UI tree inspection, gesture injection, screenshot capture, and background services (blocked on iOS). |
-| **MCP Transport** | **MCP Streamable HTTP** (`POST http://127.0.0.1:8765/mcp`) | Modern JSON-RPC 2.0 MCP standard (`2025-06-18` / `2025-03-26`), replacing deprecated HTTP+SSE. Works both in-app over loopback and externally via `adb forward`. |
-| **Local Server Host** | Embedded **Ktor CIO** inside an Android `ForegroundService` | Zero PC/Termux dependency, sub-5ms loopback latency, survives Doze/background eviction, strictly bound to `127.0.0.1` with constant-time Bearer token auth. |
-| **OS Execution Bridge** | **Hybrid 4-Layer Bridge**: `AccessibilityService` (UI tree + gestures + Android 11+ `takeScreenshot`) + `NotificationListenerService` + OS Intents & System Managers | 100% rootless and Shizuku-free while delivering semantic UI precision, instant multimodal vision fallback without repeated MediaProjection prompts, and deterministic app/setting control. |
-| **Orchestration** | **Gemini 2.5 Flash REST Client** with dynamic `tools/list` discovery, post-action UI-hash verification, and automatic screenshot self-correction | Decoupled MCP tool loading, preserved `thoughtSignature`, automatic recovery when UI does not change, and live RPM + daily USD budget caps. |
-| **Voice & Safety** | Android `SpeechRecognizer` (Quick Settings Tile + wake-phrase loop) + `TextToSpeech` + fail-closed **Voice Confirmation Gate** | Instant hands-free control with mandatory spoken/UI confirmation before sending messages, payments, deletions, or calls, plus automatic password redaction and app denylist. |
-
-## Exposed Local MCP Tools (18 Tools + 3 Resources)
-
-- **Perception**: `get_device_state`, `read_ui_tree`, `capture_screen`, `get_notifications`, `list_installed_apps`
-- **Atomic UI Control**: `tap_node`, `tap_xy`, `long_press`, `swipe`, `scroll`, `type_text`, `press_key`
-- **Apps & System**: `launch_app`, `open_url`, `manage_notification`, `control_system_setting`
-- **Composite Workflows**: `wait_for_ui`, `find_and_tap`
-- **MCP Resources**: `phone://device/state`, `phone://ui/tree`, `phone://notifications`
-
-## Build & Install
-
-### Option A — Build APK in the Cloud via GitHub Actions (No Android Studio Needed)
-1. Create a new GitHub repository and upload the contents of `GeminiMcpPhoneAgent/`.
-2. If you upload via browser drag-and-drop and GitHub skips the hidden `.github` folder, go to **Actions → set up a workflow yourself**, name it `.github/workflows/build-apk.yml`, and paste the included workflow file.
-3. Run the **Build Android APK** workflow and download `GeminiMcpPhoneAgent-debug-apk` from the workflow Artifacts.
-4. Transfer `app-debug.apk` to your Android 11+ phone and install it.
-
-### Option B — Build Locally with Android Studio / Gradle
-```bash
-cd GeminiMcpPhoneAgent
-gradle assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+## How It Works
+```
+Official Gemini App (Cloud)
+   │  HTTPS POST /mcp/<secret-token>
+   ▼
+Cloudflare Worker + SQLite Durable Object (100% Free Tier, permanent HTTPS URL)
+   │  Persistent Outbound WebSocket (wss://)
+   ▼
+Android App (GeminiMcpPhoneAgent) → LocalMcpServer (18 phone tools) → Accessibility & Notification Bridges
 ```
 
-## First-Time Phone Setup
-1. Open **Gemini MCP Agent** and grant Microphone and Notification permissions.
-2. Tap **Settings** (top-right gear) and paste your **Google Gemini API Key** (stored locally in `EncryptedSharedPreferences`).
-3. Tap **Enable Accessibility** → enable **Gemini MCP Phone Bridge**.
-4. Tap **Enable Notifs** → enable **Gemini MCP Notification Bridge**.
-5. Tap **Start** to launch the local MCP server on `127.0.0.1:8765`.
-6. Optional: Add the **Gemini Voice** Quick Settings Tile from your notification shade for one-tap voice activation from any app, or enable the hands-free wake phrase (`"hey gemini"`).
+## 3-Step Setup (100% Free, Zero PC / Zero Termux Needed)
 
-## Connecting an External Desktop MCP Client (Optional)
-Because the server implements standard MCP Streamable HTTP on `127.0.0.1:8765`, you can also connect Gemini CLI, Claude Desktop, or any MCP client over USB ADB without exposing your phone on Wi-Fi:
+### Step 1 — Deploy the Free Cloudflare Tunnel Relay (2 minutes)
+1. Upload this folder to a GitHub repository.
+2. Create a free account at [dash.cloudflare.com](https://dash.cloudflare.com) (no credit card required — SQLite Durable Objects are included on the Workers Free plan).
+3. In Cloudflare Dashboard → **Compute (Workers) → Workers & Pages → Create → Import a repository**:
+   - Select your GitHub repo and set **Root directory** to `cloudflare-tunnel-relay`.
+   - Click **Deploy**.
+   - Copy your permanent Worker URL, e.g. `https://gemini-phone-mcp-relay.<your-subdomain>.workers.dev`.
+   *(Alternatively, add `CLOUDFLARE_API_TOKEN` in GitHub Repo Secrets and run the **Deploy Free Cloudflare MCP Tunnel** workflow in GitHub Actions.)*
 
-```bash
-adb forward tcp:8765 tcp:8765
-curl http://127.0.0.1:8765/health
-```
+### Step 2 — Build & Install the Android APK via GitHub Actions
+1. In your GitHub repo → **Actions → Build Android APK → Run workflow**.
+   *(If browser drag-and-drop skipped `.github/`, create `.github/workflows/build-apk.yml` using **Actions → set up a workflow yourself** and paste the included file.)*
+2. Download `GeminiMcpPhoneAgent-debug-apk`, unzip, and install `app-debug.apk` on your Android 11+ phone.
+3. Open the app:
+   - Tap **Enable Accessibility** → enable **Gemini MCP Phone Bridge**.
+   - Tap **Enable Notifs** → enable **Gemini MCP Notification Bridge**.
+   - Tap **Settings (gear icon)** → paste your Cloudflare Worker URL into **Cloudflare Worker Tunnel URL** → tap **Save**. *(Leave Gemini API Key blank if you only use the Official Gemini App!)*
+   - Tap **Start**. Wait 2 seconds until it shows **Official Gemini App Tunnel: CONNECTED**.
+   - Tap **Copy URL** (copies `https://gemini-phone-mcp-relay.<you>.workers.dev/mcp/<secret-token>`).
 
-Then configure your MCP client with:
-- **Endpoint**: `http://127.0.0.1:8765/mcp`
-- **Header**: `Authorization: Bearer <your-token-from-app-settings>`
+### Step 3 — Connect Inside the Official Gemini App
+1. Open **Gemini** on desktop web (`gemini.google.com`) → **Settings & help → Connected Apps → Custom apps → Add a custom app**.
+2. Paste the copied URL (`https://.../mcp/<secret-token>`) as the **MCP server URL** and save.
+3. Open the **official Gemini app on your Android phone** and speak naturally — Gemini will call your phone's 18 MCP tools directly, while the app's **Voice Confirmation Gate** still protects sensitive actions (sending messages, payments, deletions, calls).
